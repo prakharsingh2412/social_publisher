@@ -16,15 +16,12 @@ class Platform(models.TextChoices):
 
 # -------------------- Admin-managed credentials --------------------
 class PlatformCredential(models.Model):
-    """
-    Global (app-owned) credentials for each platform.
-    Managed via Django admin — users never see or touch these.
-    """
+    """Unchanged from yours — managed via admin only."""
     platform         = models.CharField(max_length=20, choices=Platform.choices)
-    label            = models.CharField(max_length=100)  # e.g. "Main Twitter"
-    encrypted_token  = EncryptedTextField()               # API key / bot token / webhook URL
-    encrypted_secret = EncryptedTextField(null=True, blank=True)  # API secret if needed
-    extra_config     = models.JSONField(default=dict, blank=True)  # e.g. {"subreddit": "python"}
+    label            = models.CharField(max_length=100)
+    encrypted_token  = EncryptedTextField()
+    encrypted_secret = EncryptedTextField(null=True, blank=True)
+    extra_config     = models.JSONField(default=dict, blank=True)
     is_active        = models.BooleanField(default=True)
     token_expires_at = models.DateTimeField(null=True, blank=True)
     created_at       = models.DateTimeField(auto_now_add=True)
@@ -50,20 +47,22 @@ class PostStatus(models.TextChoices):
 
 # -------------------- Post --------------------
 class Post(models.Model):
-    user         = models.ForeignKey(
+    user              = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="posts"
     )
-    content      = models.TextField()
-    media_urls   = models.JSONField(default=list, blank=True)
-    scheduled_at = models.DateTimeField(db_index=True)
-    status       = models.CharField(
+    title             = models.CharField(max_length=300, blank=True, null=True)   # ← ADD (Reddit needs it)
+    content           = models.TextField()
+    content_overrides = models.JSONField(default=dict, blank=True)                # ← ADD (Twitter 280-char cap)
+    media_urls        = models.JSONField(default=list, blank=True)
+    scheduled_at      = models.DateTimeField(db_index=True)
+    status            = models.CharField(
         max_length=20,
         choices=PostStatus.choices,
         default=PostStatus.QUEUED,
         db_index=True,
     )
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    created_at        = models.DateTimeField(auto_now_add=True)
+    updated_at        = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -91,6 +90,7 @@ class PostPlatformResult(models.Model):
         db_index=True,
     )
     error_message    = models.TextField(null=True, blank=True)
+    retry_count      = models.PositiveIntegerField(default=0)                     # ← ADD (retry loop)
     published_at     = models.DateTimeField(null=True, blank=True)
 
     class Meta:

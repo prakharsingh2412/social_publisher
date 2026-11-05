@@ -6,8 +6,17 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from accounts.views import HealthCheckView
 
+# --- ADD THIS IMPORT ---
+from platforms.views import TwitterOAuthStartView, TwitterOAuthCallbackView
+# -----------------------
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+
+    # --- ADD THESE TWO PATHS ---
+    path("oauth/twitter/", TwitterOAuthStartView.as_view(), name="twitter-auth-start"),
+    path("oauth/twitter/callback/", TwitterOAuthCallbackView.as_view(), name="twitter-auth-callback"),
+    # ---------------------------
 
     # System
     path("api/v1/health/", HealthCheckView.as_view(), name="health"),

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
@@ -25,12 +26,13 @@ INSTALLED_APPS = [
     "corsheaders",
     "fernet_fields",
 
+    "django_celery_beat",
     "accounts",
     "platforms",
 ]
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",           # must be near the top
+    "corsheaders.middleware.CorsMiddleware", 
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -141,3 +143,29 @@ CORS_ALLOWED_ORIGINS = [
 
 # -------------------- Fernet encryption --------------------
 FERNET_KEYS = [config("ENCRYPTION_KEY")]
+
+# -------------------- Cache (Redis) --------------------
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": config("REDIS_CACHE_URL", default="redis://localhost:6379/1"),
+        "KEY_PREFIX": "sp",
+        "TIMEOUT": 300,
+    }
+}
+
+# -------------------- Celery --------------------
+CELERY_BROKER_URL  = config("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = config("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_TIMEZONE = "UTC"
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# -------------------- Twitter OAuth --------------------
+TWITTER_CLIENT_ID = os.environ.get("TWITTER_CLIENT_ID")
+TWITTER_CLIENT_SECRET = os.environ.get("TWITTER_CLIENT_SECRET")
+TWITTER_REDIRECT_URI = os.environ.get("TWITTER_REDIRECT_URI", "http://127.0.0.1:8000/oauth/twitter/callback/")
+
+# -------------------- Published Feature Flag --------------------
+PUBLISH_DRY_RUN = config("PUBLISH_DRY_RUN", cast=bool, default=True)
