@@ -52,28 +52,10 @@ class FacebookPublisher(BasePublisher):
         return PublishResult(platform_post_id=str(body.get("id", "")), raw=body)
 
     def refresh(self, credential) -> None:
-        # Long-lived Page token exchange. Requires app_id + app_secret in extra_config,
-        # and the current short-lived user token in encrypted_token.
-        import datetime, requests
-        from django.utils import timezone
-        cfg = credential.extra_config or {}
-        try:
-            r = requests.get(
-                f"{GRAPH}/oauth/access_token",
-                params={
-                    "grant_type": "fb_exchange_token",
-                    "client_id": cfg["app_id"],
-                    "client_secret": cfg["app_secret"],
-                    "fb_exchange_token": self._token(credential),
-                },
-                timeout=15,
-            )
-        except requests.RequestException as e:
-            raise TransientError(f"facebook refresh network: {e}") from e
-        if r.status_code >= 400:
-            raise PermanentError(f"facebook refresh: {r.status_code} {r.text[:200]}")
-        j = r.json()
-        credential.encrypted_token = j["access_token"]
-        credential.token_expires_at = timezone.now() + datetime.timedelta(
-            seconds=j.get("expires_in", 60 * 24 * 3600)
-        )
+        """
+        Page Access Tokens derived from a long-lived User Token do not expire.
+        Calling fb_exchange_token on a Page Token will either fail or corrupt 
+        the token by returning a User Token instead. 
+        Therefore, no refresh is needed here.
+        """
+        pass
