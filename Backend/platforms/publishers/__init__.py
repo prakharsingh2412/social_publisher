@@ -4,26 +4,34 @@ from .base import (
     BasePublisher, Payload, PublishResult,
     PublishError, TransientError, PermanentError,
 )
-from .discord import DiscordPublisher
-from .reddit import RedditPublisher
-from .twitter import TwitterPublisher
-from .linkedin import LinkedInPublisher
-from .facebook import FacebookPublisher
+
+# ── active ──────────────────────────────────────────────────
+from .facebook  import FacebookPublisher
 from .instagram import InstagramPublisher
-from .dry_run import DryRunPublisher
+from .twitter   import TwitterPublisher
+from .youtube   import YouTubePublisher
+from .dry_run   import DryRunPublisher          # ← uncommented
+
+# ── disabled for now (files not present yet) ────────────────
+# from .discord   import DiscordPublisher
+# from .reddit    import RedditPublisher
+# from .linkedin  import LinkedInPublisher
 
 
 PUBLISHERS: dict[str, type[BasePublisher]] = {
     p.platform: p for p in (
-        DiscordPublisher, RedditPublisher, TwitterPublisher,
-        LinkedInPublisher, FacebookPublisher, InstagramPublisher,
+        FacebookPublisher,
+        InstagramPublisher,
+        TwitterPublisher,
+        YouTubePublisher,
     )
 }
 
 
 def get_publisher(platform: str) -> BasePublisher:
     if settings.PUBLISH_DRY_RUN:
-        return DryRunPublisher(platform)
+        return DryRunPublisher(platform)         # ← simplified, no try/except needed
+
     cls = PUBLISHERS.get(platform)
     if cls is None:
         raise PermanentError(f"No publisher registered for '{platform}'")

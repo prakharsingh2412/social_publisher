@@ -118,6 +118,11 @@ REST_FRAMEWORK = {
     },
 }
 
+FRONTEND_OAUTH_REDIRECT = config(
+    "FRONTEND_OAUTH_REDIRECT",
+    default="http://localhost:5173/settings/connections",
+)
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -137,8 +142,8 @@ SPECTACULAR_SETTINGS = {
 
 # -------------------- CORS --------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 # -------------------- Fernet encryption --------------------
@@ -163,9 +168,15 @@ CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 # -------------------- Twitter OAuth --------------------
-TWITTER_CLIENT_ID = os.environ.get("TWITTER_CLIENT_ID")
-TWITTER_CLIENT_SECRET = os.environ.get("TWITTER_CLIENT_SECRET")
-TWITTER_REDIRECT_URI = os.environ.get("TWITTER_REDIRECT_URI", "http://127.0.0.1:8000/oauth/twitter/callback/")
+TWITTER_CLIENT_ID     = config("TWITTER_CLIENT_ID")
+TWITTER_CLIENT_SECRET = config("TWITTER_CLIENT_SECRET")
+TWITTER_REDIRECT_URI  = config("TWITTER_REDIRECT_URI")
+
+# -------------------- Meta OAuth --------------------
+FACEBOOK_APP_ID        = config("FACEBOOK_APP_ID")
+FACEBOOK_APP_SECRET    = config("FACEBOOK_APP_SECRET")
+FACEBOOK_REDIRECT_URI  = config("FACEBOOK_REDIRECT_URI")
+INSTAGRAM_REDIRECT_URI = config("INSTAGRAM_REDIRECT_URI")
 
 # -------------------- Published Feature Flag --------------------
 PUBLISH_DRY_RUN = config("PUBLISH_DRY_RUN", cast=bool, default=True)

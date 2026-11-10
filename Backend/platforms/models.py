@@ -14,9 +14,14 @@ class Platform(models.TextChoices):
     LINKEDIN  = "linkedin",  "LinkedIn"
 
 
-# -------------------- Admin-managed credentials --------------------
+# -------------------- Per-user platform credentials --------------------
 class PlatformCredential(models.Model):
-    """Unchanged from yours — managed via admin only."""
+    """OAuth credential, owned by a specific user (one per platform per user)."""
+    user             = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="platform_credentials",
+    )
     platform         = models.CharField(max_length=20, choices=Platform.choices)
     label            = models.CharField(max_length=100)
     encrypted_token  = EncryptedTextField()
@@ -28,11 +33,11 @@ class PlatformCredential(models.Model):
     updated_at       = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("platform", "label")
+        unique_together = ("user", "platform")
         ordering = ["platform", "label"]
 
     def __str__(self):
-        return f"{self.get_platform_display()} — {self.label}"
+        return f"{self.user.username} — {self.get_platform_display()} — {self.label}"
 
 
 # -------------------- Post statuses --------------------
@@ -50,9 +55,9 @@ class Post(models.Model):
     user              = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="posts"
     )
-    title             = models.CharField(max_length=300, blank=True, null=True)   # ← ADD (Reddit needs it)
+    title             = models.CharField(max_length=300, blank=True, null=True)
     content           = models.TextField()
-    content_overrides = models.JSONField(default=dict, blank=True)                # ← ADD (Twitter 280-char cap)
+    content_overrides = models.JSONField(default=dict, blank=True)
     media_urls        = models.JSONField(default=list, blank=True)
     scheduled_at      = models.DateTimeField(db_index=True)
     status            = models.CharField(
@@ -90,7 +95,7 @@ class PostPlatformResult(models.Model):
         db_index=True,
     )
     error_message    = models.TextField(null=True, blank=True)
-    retry_count      = models.PositiveIntegerField(default=0)                     # ← ADD (retry loop)
+    retry_count      = models.PositiveIntegerField(default=0)
     published_at     = models.DateTimeField(null=True, blank=True)
 
     class Meta:

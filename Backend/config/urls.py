@@ -7,15 +7,24 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from accounts.views import HealthCheckView
 
 # --- ADD THIS IMPORT ---
-from platforms.views import TwitterOAuthStartView, TwitterOAuthCallbackView
+from platforms.views import (
+    FacebookLoginView, InstagramLoginView,
+    FacebookOAuthCallbackView, InstagramOAuthCallbackView,
+    TwitterOAuthStartView, TwitterOAuthCallbackView,
+)
 # -----------------------
 
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    # --- ADD THESE TWO PATHS ---
-    path("oauth/twitter/", TwitterOAuthStartView.as_view(), name="twitter-auth-start"),
-    path("oauth/twitter/callback/", TwitterOAuthCallbackView.as_view(), name="twitter-auth-callback"),
+
+    path("oauth/facebook/login/",  FacebookLoginView.as_view(),  name="facebook-login"),
+    path("oauth/instagram/login/", InstagramLoginView.as_view(), name="instagram-login"),
+    path("oauth/twitter/login/",   TwitterOAuthStartView.as_view(), name="twitter-login"),
+
+    path("oauth/facebook/callback/",  FacebookOAuthCallbackView.as_view(),  name="facebook-callback"),
+    path("oauth/instagram/callback/", InstagramOAuthCallbackView.as_view(), name="instagram-callback"),
+    path("oauth/twitter/callback/",   TwitterOAuthCallbackView.as_view(),   name="twitter-callback"),
     # ---------------------------
 
     # System
