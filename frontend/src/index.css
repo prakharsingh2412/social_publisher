@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  /* DM Sans Font */
+  --font-sans: "DM Sans", sans-serif;
+
+  /* Brand Colors from image */
+  --color-brand-pink: #FA0056;   /* Vibrant Pink */
+  --color-brand-red: #8B0029;    /* Dark Maroon/Red */
+  --color-brand-dark: #1A1A1A;   /* Dark Charcoal/Black */
+  --color-brand-light: #FFFFFF;  /* White */
+  --color-brand-gray: #F9FAFB;   /* Light background */
+}
+
+@layer base {
+  body {
+    @apply bg-brand-gray text-brand-dark font-sans antialiased;
+  }
+}
