@@ -7,6 +7,7 @@ from django.utils import timezone
 from .base import BasePublisher, Payload, PublishResult, TransientError, PermanentError
 
 TWEET_URL = "https://api.twitter.com/2/tweets"
+MEDIA_UPLOAD_URL = "https://api.twitter.com/2/media/upload"
 
 class TwitterPublisher(BasePublisher):
     platform = "twitter"
@@ -22,13 +23,53 @@ class TwitterPublisher(BasePublisher):
             "Content-Type": "application/json"
         }
 
-        # Basic text tweet (Media upload via OAuth 2.0 is different, skipping for now)
+        media_ids = []
+
+        # Step 1: Upload media if present
+        if payload.media_urls:
+            # Twitter allows a max of 4 images
+            for url in payload.media_urls[:self.max_media_count]:
+                try:
+                    # Download the image from the public URL
+                    img_response = requests.get(url, timeout=30)
+                    img_response.raise_for_status()
+                    
+                    # Base64 encode the image for Twitter's simple upload
+                    media_payload = {
+                        "media": base64.b64encode(img_response.content).decode('utf-8'),
+                        "media_category": "tweet_image"
+                    }
+                    
+                    upload_res = requests.post(
+                        MEDIA_UPLOAD_URL,
+                        json=media_payload,
+                        headers=headers,
+                        timeout=60
+                    )
+                    
+                    if upload_res.status_code not in (200, 201):
+                        raise PermanentError(
+                            f"twitter media upload failed: {upload_res.status_code} - {upload_res.text[:200]}"
+                        )
+                    
+                    # Extract the media_id
+                    media_data = upload_res.json().get("data", {})
+                    media_id = media_data.get("id") or media_data.get("media_id_string")
+                    
+                    if not media_id:
+                        raise PermanentError(f"twitter media upload missing ID: {upload_res.text[:200]}")
+                        
+                    media_ids.append(str(media_id))
+
+                except requests.RequestException as e:
+                    raise TransientError(f"twitter media download/upload network: {e}") from e
+
+        # Step 2: Create the tweet
         body = {"text": payload.content}
         
-        if payload.media_urls:
-            # NOTE: X v2 media upload requires a different flow. 
-            # For now, we block media to prevent silent failures.
-            raise PermanentError("Twitter media upload is not yet implemented for OAuth 2.0.")
+        # Attach the uploaded media IDs to the tweet
+        if media_ids:
+            body["media"] = {"media_ids": media_ids}
 
         try:
             r = requests.post(TWEET_URL, json=body, headers=headers, timeout=15)
@@ -81,6 +122,4 @@ class TwitterPublisher(BasePublisher):
             credential.encrypted_secret = tokens["refresh_token"]
         
         expires_in = tokens.get("expires_in", 7200)
-        
-        # FIXED: Using standard timedelta here instead of timezone.timedelta
         credential.token_expires_at = timezone.now() + timedelta(seconds=expires_in)

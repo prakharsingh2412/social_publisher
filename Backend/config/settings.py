@@ -186,4 +186,4 @@ YOUTUBE_CLIENT_SECRET = config("YOUTUBE_CLIENT_SECRET")
 YOUTUBE_REDIRECT_URI = config("YOUTUBE_REDIRECT_URI")
 
 # -------------------- Published Feature Flag --------------------
-PUBLISH_DRY_RUN = config("PUBLISH_DRY_RUN", cast=bool, default=True)
+PUBLISH_DRY_RUN = config("PUBLISH_DRY_RUN", cast=bool, default=False)

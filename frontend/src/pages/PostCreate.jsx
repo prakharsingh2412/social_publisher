@@ -6,6 +6,13 @@ import { SUPPORTED_PLATFORMS } from '../api/urls';
 import { PLATFORM_META } from '../components/PlatformBadge';
 import { useToast } from '../context/ToastContext';
 
+const PLATFORM_HINTS = {
+  twitter: "Max 280 characters. Images supported.",
+  facebook: "Text, images, or links supported.",
+  instagram: "⚠️ Requires an Image or Video. Max 2,200 characters.",
+  youtube: "⚠️ Requires a Video URL. Text will be used as Title/Description.",
+};
+
 export default function PostCreate() {
   const { push } = useToast();
   const navigate = useNavigate();
@@ -15,6 +22,7 @@ export default function PostCreate() {
   const [selected, setSelected] = useState([]);
   const [credentials, setCredentials] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -27,16 +35,43 @@ export default function PostCreate() {
     setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]));
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setUploading(true);
+    try {
+      const data = await postsApi.uploadMedia(file);
+      setMediaText((prev) => (prev ? `${prev}\n${data.url}` : data.url));
+      push('File uploaded successfully!', 'success');
+    } catch (err) {
+      push(err.response?.data?.error || 'Upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
     if (!content.trim()) return setError('Content is required.');
     if (selected.length === 0) return setError('Pick at least one platform.');
+    
+    // Simple validation hints
+    if (selected.includes('instagram') && !mediaText.trim()) {
+      return setError('Instagram requires at least one image or video.');
+    }
+    if (selected.includes('youtube') && !mediaText.trim()) {
+      return setError('YouTube requires a video URL.');
+    }
+
     setBusy(true);
     try {
       const media_urls = mediaText.split('\n').map((s) => s.trim()).filter(Boolean);
       const payload = { content: content.trim(), media_urls, platforms: selected };
       if (scheduledAt) payload.scheduled_at = new Date(scheduledAt).toISOString();
+      
       const post = await postsApi.create(payload);
       push('Post created!', 'success');
       navigate(`/posts/${post.id}`);
@@ -61,25 +96,36 @@ export default function PostCreate() {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="What do you want to publish?"
-            maxLength={2000}
             className="w-full resize-y rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-pink focus:outline-none focus:ring-2 focus:ring-brand-pink/20"
           />
-          <div className="mt-1 text-right text-xs text-gray-400">{content.length} / 2000</div>
+          <div className="mt-1 text-right text-xs text-gray-400">{content.length} characters</div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Media URLs (one per line, optional)</label>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <label className="mb-2 block text-sm font-medium text-gray-700">Media (Image/Video)</label>
+          
+          {/* Local File Upload */}
+          <input 
+            type="file" 
+            accept="image/*,video/*" 
+            onChange={handleFileUpload} 
+            disabled={uploading}
+            className="mb-3 block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-pink/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-pink hover:file:bg-brand-pink/20"
+          />
+          {uploading && <p className="text-xs text-brand-pink animate-pulse mb-2">Uploading file...</p>}
+
+          {/* Manual URL Entry */}
           <textarea
-            rows={3}
+            rows={2}
             value={mediaText}
             onChange={(e) => setMediaText(e.target.value)}
-            placeholder="https://example.com/image.jpg"
-            className="w-full resize-y rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-pink focus:outline-none focus:ring-2 focus:ring-brand-pink/20"
+            placeholder="Or paste URLs here (one per line)"
+            className="w-full resize-y rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-pink focus:outline-none"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">Scheduled at (optional)</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Scheduled at (Optional)</label>
           <input
             type="datetime-local"
             value={scheduledAt}
@@ -113,10 +159,17 @@ export default function PostCreate() {
               );
             })}
           </div>
-          {selected.some((p) => !connectedSet.has(p)) && (
-            <p className="mt-2 text-xs font-medium text-amber-600">
-              ⚠ Some selected platforms are not connected. The post will be created but publish will fail for them.
-            </p>
+          
+          {/* DYNAMIC HINTS */}
+          {selected.length > 0 && (
+            <div className="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+              <p className="font-semibold mb-1">Platform Rules:</p>
+              <ul className="list-disc pl-4 space-y-1">
+                {selected.map(p => (
+                  <li key={p}>{PLATFORM_META[p].label}: {PLATFORM_HINTS[p]}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
@@ -124,7 +177,7 @@ export default function PostCreate() {
           <button type="button" onClick={() => navigate(-1)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
             Cancel
           </button>
-          <button disabled={busy} className="rounded-lg bg-brand-pink px-6 py-2 text-sm font-semibold text-white hover:bg-brand-pink/90 disabled:opacity-50">
+          <button disabled={busy || uploading} className="rounded-lg bg-brand-pink px-6 py-2 text-sm font-semibold text-white hover:bg-brand-pink/90 disabled:opacity-50">
             {busy ? 'Creating…' : 'Create post'}
           </button>
         </div>

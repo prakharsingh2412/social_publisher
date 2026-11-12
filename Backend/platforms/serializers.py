@@ -32,7 +32,7 @@ class PostPlatformResultSerializer(serializers.ModelSerializer):
         fields = (
             "id", "platform", "status",
             "platform_post_id", "published_at", "error_message",
-            "retry_count",                        # ← ADD
+            "retry_count",
         )
         read_only_fields = fields
 
@@ -49,7 +49,7 @@ class PostSerializer(serializers.ModelSerializer):
         model  = Post
         fields = (
             "id", "author",
-            "title", "content", "content_overrides",     # ← ADD 2
+            "title", "content", "content_overrides",
             "media_urls", "scheduled_at", "status",
             "platform_results", "created_at", "updated_at",
         )
@@ -65,15 +65,18 @@ class PostCreateSerializer(serializers.ModelSerializer):
         write_only=True,
         min_length=1,
     )
-    publish_now = serializers.BooleanField(write_only=True, default=False)   # ← ADD
+    publish_now = serializers.BooleanField(write_only=True, default=False)
+    
+    # FIXED: Explicitly make scheduled_at optional
+    scheduled_at = serializers.DateTimeField(required=False, allow_null=True)
 
     class Meta:
         model  = Post
         fields = (
             "id",
-            "title", "content", "content_overrides",     # ← ADD 2
+            "title", "content", "content_overrides",
             "media_urls", "scheduled_at",
-            "platforms", "publish_now",                  # ← ADD 1
+            "platforms", "publish_now",
         )
         read_only_fields = ("id",)
 
@@ -108,9 +111,10 @@ class PostCreateSerializer(serializers.ModelSerializer):
             )
         }
 
-        # If scheduled in the past OR publish_now → go straight to QUEUED + enqueue.
-        # Otherwise stay DRAFT; user hits publish-now (or a future beat task).
-        due = publish_now or validated_data["scheduled_at"] <= timezone.now()
+
+        scheduled_at = validated_data.get("scheduled_at")
+        due = publish_now or (scheduled_at and scheduled_at <= timezone.now())
+        
         validated_data["status"] = (
             PostStatus.QUEUED if due else PostStatus.DRAFT
         )

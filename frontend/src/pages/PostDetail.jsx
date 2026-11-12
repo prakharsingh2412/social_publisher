@@ -5,6 +5,18 @@ import Spinner from '../components/Spinner';
 import PlatformBadge from '../components/PlatformBadge';
 import { useToast } from '../context/ToastContext';
 
+// Helper function to generate links to the actual social media post
+const getPostUrl = (platform, postId) => {
+  if (!postId) return null;
+  switch (platform) {
+    case 'twitter': return `https://twitter.com/i/web/status/${postId}`;
+    case 'facebook': return `https://www.facebook.com/${postId}`;
+    case 'youtube': return `https://youtu.be/${postId}`;
+    case 'instagram': return `https://www.instagram.com/`; // Graph API returns numeric ID, not shortcode. Link to profile.
+    default: return null;
+  }
+};
+
 export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -32,7 +44,7 @@ export default function PostDetail() {
       const fresh = await postsApi.get(id);
       setPost(fresh);
     } catch (e) {
-      push('Publish-now is not available yet (backend feature pending).', 'error');
+      push('Publish-now failed.', 'error');
     } finally { setPublishing(false); }
   };
 
@@ -99,20 +111,38 @@ export default function PostDetail() {
             <p className="text-sm text-gray-500">No per-platform results yet.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {post.platform_results.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <PlatformBadge platform={r.platform} />
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
-                    r.status === 'success' || r.status === 'published' ? 'bg-green-100 text-green-700' :
-                    r.status === 'failed' ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {r.status}
-                  </span>
-                  {r.error_message && <span className="text-xs text-brand-red w-full">{r.error_message}</span>}
-                  {r.platform_post_id && <span className="w-full text-xs text-gray-400">ID: {r.platform_post_id}</span>}
-                </li>
-              ))}
+              {post.platform_results.map((r) => {
+                const liveUrl = getPostUrl(r.platform, r.platform_post_id);
+                
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
+                    <PlatformBadge platform={r.platform} />
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${
+                      r.status === 'success' || r.status === 'published' ? 'bg-green-100 text-green-700' :
+                      r.status === 'failed' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {r.status}
+                    </span>
+                    
+                    {r.error_message && <span className="text-xs text-brand-red w-full">{r.error_message}</span>}
+                    
+                    {/* NEW: Direct Link to the Live Post */}
+                    {liveUrl && (
+                      <a 
+                        href={liveUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="w-full text-xs font-semibold text-brand-pink hover:underline mt-1"
+                      >
+                        View on {r.platform} ↗
+                      </a>
+                    )}
+                    
+                    {r.platform_post_id && <span className="w-full text-xs text-gray-400">ID: {r.platform_post_id}</span>}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

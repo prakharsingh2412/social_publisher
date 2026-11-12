@@ -59,7 +59,7 @@ class Post(models.Model):
     content           = models.TextField()
     content_overrides = models.JSONField(default=dict, blank=True)
     media_urls        = models.JSONField(default=list, blank=True)
-    scheduled_at      = models.DateTimeField(db_index=True)
+    scheduled_at      = models.DateTimeField(null=True, blank=True, db_index=True)
     status            = models.CharField(
         max_length=20,
         choices=PostStatus.choices,

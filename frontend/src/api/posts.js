@@ -10,19 +10,37 @@ export const postsApi = {
     // Normalize paginated vs bare array responses
     return Array.isArray(data) ? { count: data.length, results: data } : data;
   },
+  
   async create(payload) {
     const { data } = await api.post(POSTS.list, payload);
     return data;
   },
+  
   async get(id) {
     const { data } = await api.get(POSTS.detail(id));
     return data;
   },
+  
   async remove(id) {
     await api.delete(POSTS.detail(id));
   },
+  
   async publishNow(id) {
     const { data } = await api.post(POSTS.publishNow(id));
     return data;
+  },
+
+  // NEW: Upload local media file
+  async uploadMedia(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // We send the file as multipart/form-data
+    const { data } = await api.post(POSTS.upload, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return data; 
   },
 };

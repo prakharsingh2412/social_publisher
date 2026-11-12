@@ -4,6 +4,7 @@ import secrets
 import requests
 import tempfile
 import urllib.parse
+import os
 from urllib.parse import urlencode
 from datetime import timedelta
 
@@ -11,11 +12,13 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.http import JsonResponse
 from django.utils import timezone
+from django.core.files.storage import default_storage
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
 
@@ -113,12 +116,7 @@ class PostViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        post = self.get_object()
-        if post.status in (PostStatus.PUBLISHED, PostStatus.PARTIAL):
-            return Response(
-                {"detail": "Cannot delete a published post."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # FIXED: Removed the restriction. You can now permanently delete any post.
         return super().destroy(request, *args, **kwargs)
 
     @extend_schema(
@@ -182,7 +180,7 @@ class TwitterOAuthStartView(APIView):
             "response_type": "code",
             "client_id": settings.TWITTER_CLIENT_ID,
             "redirect_uri": settings.TWITTER_REDIRECT_URI,
-            "scope": "tweet.read tweet.write users.read offline.access",
+            "scope": "tweet.read tweet.write users.read offline.access media.write",
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
@@ -472,6 +470,7 @@ class InstagramOAuthCallbackView(MetaOAuthCallbackView):
         )
         return credential
 
+
 class YouTubeLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -556,3 +555,25 @@ class YouTubeCallbackView(APIView):
         )
         
         return oauth_respond("youtube", True, f"Connected {channel_title}.", label=credential.label)
+
+
+# ============================================================
+# MEDIA UPLOAD API (NEW)
+# ============================================================
+
+class MediaUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Save file to local media folder
+        file_name = default_storage.save(f"uploads/{file_obj.name}", file_obj)
+        
+        # Build the full URL (e.g., http://localhost:8000/media/uploads/image.jpg)
+        file_url = request.build_absolute_uri(settings.MEDIA_URL + file_name)
+        
+        return Response({"url": file_url}, status=status.HTTP_201_CREATED)

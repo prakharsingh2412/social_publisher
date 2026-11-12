@@ -14,6 +14,7 @@ export const POSTS = {
   list:       `${BASE}${PREFIX}/posts/`,
   detail:     (id) => `${BASE}${PREFIX}/posts/${id}/`,
   publishNow: (id) => `${BASE}${PREFIX}/posts/${id}/publish-now/`,
+  upload:     `${BASE}${PREFIX}/upload-media/`, 
 };
 
 export const PLATFORMS = {
