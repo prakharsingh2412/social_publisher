@@ -30,8 +30,11 @@ class TwitterPublisher(BasePublisher):
             # Twitter allows a max of 4 images
             for url in payload.media_urls[:self.max_media_count]:
                 try:
-                    # Download the image from the public URL
-                    img_response = requests.get(url, timeout=30)
+                    # FIXED: Added User-Agent to bypass 403 Forbidden from image hosts
+                    download_headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    }
+                    img_response = requests.get(url, headers=download_headers, timeout=30)
                     img_response.raise_for_status()
                     
                     # Base64 encode the image for Twitter's simple upload
