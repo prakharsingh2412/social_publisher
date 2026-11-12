@@ -4,7 +4,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.utils import timezone
 
-from .models import Post, PostPlatformResult, PlatformCredential
+from .models import Post, PostPlatformResult, PlatformCredential, PostStatus
 from .publishers import (
     get_publisher, Payload, PublishResult,
     TransientError, PermanentError,
@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 MAX_RETRIES     = 3
 RETRY_BACKOFF   = 60     # seconds; doubles each attempt
 
-
 def _build_payload(post: Post, platform: str) -> Payload:
     content = (post.content_overrides or {}).get(platform, post.content)
     return Payload(
@@ -24,27 +23,24 @@ def _build_payload(post: Post, platform: str) -> Payload:
         title=post.title,
     )
 
-
 def _rollup(post: Post) -> None:
     statuses = list(post.platform_results.values_list("status", flat=True))
     if not statuses:
         return
-    published = statuses.count(PostPlatformResult.Status.PUBLISHED) \
-        if hasattr(PostPlatformResult, "Status") \
-        else statuses.count(Post.Status.PUBLISHED)
 
     published = statuses.count("published")
     failed    = statuses.count("failed")
+    
     if published == len(statuses):
-        post.status = Post.Status.PUBLISHED
+        post.status = PostStatus.PUBLISHED
     elif failed == len(statuses):
-        post.status = Post.Status.FAILED
-    elif published:
-        post.status = Post.Status.PARTIAL
+        post.status = PostStatus.FAILED
+    elif published > 0:
+        post.status = PostStatus.PARTIAL
     else:
-        post.status = Post.Status.FAILED
+        post.status = PostStatus.FAILED
+        
     post.save(update_fields=["status", "updated_at"])
-
 
 @shared_task
 def scan_due_posts():
@@ -52,19 +48,19 @@ def scan_due_posts():
     now = timezone.now()
     stuck_cutoff = now - timedelta(minutes=15)
 
+    # FIXED: Using PostStatus instead of Post.Status
     queued = list(
-        Post.objects.filter(status=Post.Status.QUEUED, scheduled_at__lte=now)
+        Post.objects.filter(status=PostStatus.QUEUED, scheduled_at__lte=now)
         .values_list("id", flat=True)
     )
     stuck = list(
         Post.objects.filter(
-            status=Post.Status.PUBLISHING, updated_at__lte=stuck_cutoff
+            status=PostStatus.PUBLISHING, updated_at__lte=stuck_cutoff
         ).values_list("id", flat=True)
     )
     for post_id in queued + stuck:
         publish_post_task.delay(post_id)
     return {"queued": len(queued), "stuck": len(stuck)}
-
 
 @shared_task(bind=True, max_retries=MAX_RETRIES)
 def publish_post_task(self, post_id: int):
@@ -73,15 +69,16 @@ def publish_post_task(self, post_id: int):
     except Post.DoesNotExist:
         return {"status": "gone"}
 
+    # FIXED: Using PostStatus instead of Post.Status
     pending = post.platform_results.filter(
-        status__in=[Post.Status.QUEUED, Post.Status.PUBLISHING]
+        status__in=[PostStatus.QUEUED, PostStatus.PUBLISHING]
     ).select_related("credential")
 
     if not pending.exists():
         _rollup(post)
         return {"status": "nothing-to-do"}
 
-    post.status = Post.Status.PUBLISHING
+    post.status = PostStatus.PUBLISHING
     post.save(update_fields=["status", "updated_at"])
 
     retry_needed = False
@@ -92,17 +89,17 @@ def publish_post_task(self, post_id: int):
 
         errors = publisher.validate(payload)
         if errors:
-            result.status        = Post.Status.FAILED
+            result.status        = PostStatus.FAILED
             result.error_message = "; ".join(errors)
             result.save()
             continue
 
-        result.status = Post.Status.PUBLISHING
-        result.save(update_fields=["status", "updated_at"])
+        result.status = PostStatus.PUBLISHING
+        result.save(update_fields=["status"])
 
         try:
             out: PublishResult = publisher.publish(result.credential, payload)
-            result.status           = Post.Status.PUBLISHED
+            result.status           = PostStatus.PUBLISHED
             result.platform_post_id = out.platform_post_id
             result.published_at     = timezone.now()
             result.error_message    = ""
@@ -111,18 +108,18 @@ def publish_post_task(self, post_id: int):
         except TransientError as exc:
             result.retry_count  += 1
             result.error_message = str(exc)
-            result.status        = Post.Status.QUEUED
+            result.status        = PostStatus.QUEUED
             result.save()
             retry_needed = True
 
         except PermanentError as exc:
-            result.status        = Post.Status.FAILED
+            result.status        = PostStatus.FAILED
             result.error_message = str(exc)
             result.save()
 
         except Exception as exc:
             log.exception("Unexpected error in %s publisher", result.platform)
-            result.status        = Post.Status.FAILED
+            result.status        = PostStatus.FAILED
             result.error_message = f"Unexpected: {exc!r}"
             result.save()
 
@@ -131,13 +128,12 @@ def publish_post_task(self, post_id: int):
         raise self.retry(countdown=countdown)
 
     if retry_needed:   # retries exhausted → mark remaining as failed
-        post.platform_results.filter(status=Post.Status.QUEUED).update(
-            status=Post.Status.FAILED
+        post.platform_results.filter(status=PostStatus.QUEUED).update(
+            status=PostStatus.FAILED
         )
 
     _rollup(post)
     return {"status": post.status}
-
 
 @shared_task
 def refresh_expiring_credentials():

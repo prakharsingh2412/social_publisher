@@ -11,6 +11,7 @@ from platforms.views import (
     FacebookLoginView, InstagramLoginView,
     FacebookOAuthCallbackView, InstagramOAuthCallbackView,
     TwitterOAuthStartView, TwitterOAuthCallbackView,
+    YouTubeLoginView, YouTubeCallbackView,
 )
 # -----------------------
 
@@ -21,10 +22,12 @@ urlpatterns = [
     path("oauth/facebook/login/",  FacebookLoginView.as_view(),  name="facebook-login"),
     path("oauth/instagram/login/", InstagramLoginView.as_view(), name="instagram-login"),
     path("oauth/twitter/login/",   TwitterOAuthStartView.as_view(), name="twitter-login"),
+    path('oauth/youtube/login/', YouTubeLoginView.as_view(), name='youtube-login'),
 
     path("oauth/facebook/callback/",  FacebookOAuthCallbackView.as_view(),  name="facebook-callback"),
     path("oauth/instagram/callback/", InstagramOAuthCallbackView.as_view(), name="instagram-callback"),
     path("oauth/twitter/callback/",   TwitterOAuthCallbackView.as_view(),   name="twitter-callback"),
+    path('oauth/youtube/callback/', YouTubeCallbackView.as_view(), name='youtube-callback'),
     # ---------------------------
 
     # System

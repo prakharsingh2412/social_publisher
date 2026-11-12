@@ -2,6 +2,8 @@ import base64
 import hashlib
 import secrets
 import requests
+import tempfile
+import urllib.parse
 from urllib.parse import urlencode
 from datetime import timedelta
 
@@ -16,6 +18,11 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
+
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
 
 from .models import PlatformCredential, Post, PostStatus, Platform
 from .serializers import (
@@ -41,15 +48,26 @@ User = get_user_model()
 # PLATFORMS  — public listing
 # ============================================================
 
-class PlatformListView(generics.ListAPIView):
-    serializer_class   = PlatformCredentialPublicSerializer
+class PlatformCredentialViewSet(viewsets.ModelViewSet):
+    serializer_class = PlatformCredentialPublicSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Only return active credentials to the frontend
         return PlatformCredential.objects.filter(
             user=self.request.user,     
             is_active=True,
         )
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Soft delete: Instead of deleting the record from the DB, 
+        mark it as inactive so the frontend filters it out.
+        """
+        instance = self.get_object()
+        instance.is_active = False
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================
@@ -453,3 +471,88 @@ class InstagramOAuthCallbackView(MetaOAuthCallbackView):
             },
         )
         return credential
+
+class YouTubeLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # Testing fallback
+        user_id = request.user.id
+        if not user_id:
+            admin_user = User.objects.filter(is_superuser=True).first()
+            if admin_user:
+                user_id = admin_user.id
+            else:
+                return Response({"error": "No superuser found in DB."}, status=400)
+        
+        params = {
+            "client_id": settings.YOUTUBE_CLIENT_ID,
+            "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
+            "access_type": "offline",  # Required to get a refresh token
+            "prompt": "consent",       # Forces Google to give you a refresh token
+            "state": issue_state(user_id, platform="youtube")
+        }
+        
+        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(params)}"
+        return Response({"auth_url": auth_url})
+
+
+class YouTubeCallbackView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        code = request.GET.get("code")
+        state = request.GET.get("state")
+        
+        data = consume_state(state)
+        if not data:
+            return oauth_respond("youtube", False, "Invalid or expired state.")
+
+        # Exchange code for tokens
+        token_data = {
+            "code": code,
+            "client_id": settings.YOUTUBE_CLIENT_ID,
+            "client_secret": settings.YOUTUBE_CLIENT_SECRET,
+            "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        }
+        res = requests.post("https://oauth2.googleapis.com/token", data=token_data)
+        if res.status_code != 200:
+            return oauth_respond("youtube", False, f"Token error: {res.text}")
+
+        tokens = res.json()
+        access_token = tokens["access_token"]
+        refresh_token = tokens.get("refresh_token")
+        expires_in = tokens.get("expires_in", 3600)
+
+        # Get YouTube Channel Info
+        channel_res = requests.get(
+            "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        
+        channel_title = "YouTube Channel"
+        channel_id = ""
+        if channel_res.status_code == 200:
+            items = channel_res.json().get("items", [])
+            if items:
+                channel_title = items[0]["snippet"]["title"]
+                channel_id = items[0]["id"]
+
+        # Save to DB
+        credential, _ = PlatformCredential.objects.update_or_create(
+            user_id=data["user_id"],
+            platform=Platform.YOUTUBE,
+            defaults={
+                "label": f"YouTube: {channel_title}",
+                "encrypted_token": access_token,
+                "encrypted_secret": refresh_token, # Store refresh token here
+                "extra_config": {"channel_id": channel_id},
+                "is_active": True,
+                "token_expires_at": timezone.now() + timedelta(seconds=expires_in)
+            }
+        )
+        
+        return oauth_respond("youtube", True, f"Connected {channel_title}.", label=credential.label)

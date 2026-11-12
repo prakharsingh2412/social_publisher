@@ -73,7 +73,10 @@ export default function Connections() {
         {SUPPORTED_PLATFORMS.map((platform) => {
           const meta = PLATFORM_META[platform];
           const cred = byPlatform.get(platform);
-          const isImplemented = ['facebook', 'instagram', 'twitter'].includes(platform);
+          
+          // 👇 ADDED 'youtube' HERE 👇
+          const isImplemented = ['facebook', 'instagram', 'twitter', 'youtube'].includes(platform);
+          
           const isBusy = connecting === platform;
 
           return (
@@ -92,6 +95,7 @@ export default function Connections() {
                       {cred.label || 'Connected'}
                       {cred.extra_config?.page_id && ` · page ${cred.extra_config.page_id}`}
                       {cred.extra_config?.ig_user_id && ` · IG user ${cred.extra_config.ig_user_id}`}
+                      {cred.extra_config?.channel_id && ` · ID ${cred.extra_config.channel_id}`}
                     </p>
                   ) : (
                     <p className="text-sm text-gray-500">{isImplemented ? 'Not connected' : 'Coming soon'}</p>
@@ -134,7 +138,7 @@ export default function Connections() {
         <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-blue-800/80">
           <li>Facebook & Instagram require a <strong>Page</strong> or <strong>Instagram Business Account</strong>. Personal profiles are blocked by Meta's API.</li>
           <li>Twitter/X OAuth requires a developer app with write scope.</li>
-          <li>YouTube is not implemented yet.</li>
+          <li>YouTube publishing requires a valid public MP4 video URL.</li>
         </ul>
       </div>
     </div>

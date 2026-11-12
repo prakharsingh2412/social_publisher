@@ -166,6 +166,8 @@ CELERY_TIMEZONE = "UTC"
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
 
 # -------------------- Twitter OAuth --------------------
 TWITTER_CLIENT_ID     = config("TWITTER_CLIENT_ID")
@@ -177,6 +179,11 @@ FACEBOOK_APP_ID        = config("FACEBOOK_APP_ID")
 FACEBOOK_APP_SECRET    = config("FACEBOOK_APP_SECRET")
 FACEBOOK_REDIRECT_URI  = config("FACEBOOK_REDIRECT_URI")
 INSTAGRAM_REDIRECT_URI = config("INSTAGRAM_REDIRECT_URI")
+
+# -------------------- YouTube OAuth --------------------
+YOUTUBE_CLIENT_ID = config("YOUTUBE_CLIENT_ID")
+YOUTUBE_CLIENT_SECRET = config("YOUTUBE_CLIENT_SECRET")
+YOUTUBE_REDIRECT_URI = config("YOUTUBE_REDIRECT_URI")
 
 # -------------------- Published Feature Flag --------------------
 PUBLISH_DRY_RUN = config("PUBLISH_DRY_RUN", cast=bool, default=True)

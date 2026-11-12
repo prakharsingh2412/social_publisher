@@ -1,4 +1,9 @@
+import base64
 import requests
+from datetime import timedelta
+from django.conf import settings
+from django.utils import timezone
+
 from .base import BasePublisher, Payload, PublishResult, TransientError, PermanentError
 
 TWEET_URL = "https://api.twitter.com/2/tweets"
@@ -44,10 +49,6 @@ class TwitterPublisher(BasePublisher):
 
     def refresh(self, credential) -> None:
         """Refresh the OAuth 2.0 token using the refresh token."""
-        import base64, requests
-        from django.conf import settings
-        from django.utils import timezone
-        
         refresh_token = self._secret(credential)
         if not refresh_token:
             raise PermanentError("No refresh token available.")
@@ -80,4 +81,6 @@ class TwitterPublisher(BasePublisher):
             credential.encrypted_secret = tokens["refresh_token"]
         
         expires_in = tokens.get("expires_in", 7200)
-        credential.token_expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
+        
+        # FIXED: Using standard timedelta here instead of timezone.timedelta
+        credential.token_expires_at = timezone.now() + timedelta(seconds=expires_in)

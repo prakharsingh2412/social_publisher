@@ -10,7 +10,7 @@ from .facebook  import FacebookPublisher
 from .instagram import InstagramPublisher
 from .twitter   import TwitterPublisher
 from .youtube   import YouTubePublisher
-from .dry_run   import DryRunPublisher          # ← uncommented
+from .dry_run   import DryRunPublisher
 
 # ── disabled for now (files not present yet) ────────────────
 # from .discord   import DiscordPublisher
