@@ -48,7 +48,6 @@ def scan_due_posts():
     now = timezone.now()
     stuck_cutoff = now - timedelta(minutes=15)
 
-    # FIXED: Using PostStatus instead of Post.Status
     queued = list(
         Post.objects.filter(status=PostStatus.QUEUED, scheduled_at__lte=now)
         .values_list("id", flat=True)
@@ -69,7 +68,6 @@ def publish_post_task(self, post_id: int):
     except Post.DoesNotExist:
         return {"status": "gone"}
 
-    # FIXED: Using PostStatus instead of Post.Status
     pending = post.platform_results.filter(
         status__in=[PostStatus.QUEUED, PostStatus.PUBLISHING]
     ).select_related("credential")
@@ -89,6 +87,7 @@ def publish_post_task(self, post_id: int):
 
         errors = publisher.validate(payload)
         if errors:
+            print(f"❌ VALIDATION ERROR on {result.platform}: {errors}") # ADDED PRINT
             result.status        = PostStatus.FAILED
             result.error_message = "; ".join(errors)
             result.save()
@@ -104,8 +103,13 @@ def publish_post_task(self, post_id: int):
             result.published_at     = timezone.now()
             result.error_message    = ""
             result.save()
+            
+            # ADDED PRINT ON SUCCESS
+            print(f"✅ SUCCESS: Published to {result.platform}! (ID: {out.platform_post_id})")
 
         except TransientError as exc:
+            # ADDED PRINT FOR TRANSIENT ERROR
+            print(f"⚠️ TRANSIENT ERROR on {result.platform}: {exc}")
             result.retry_count  += 1
             result.error_message = str(exc)
             result.status        = PostStatus.QUEUED
@@ -113,12 +117,16 @@ def publish_post_task(self, post_id: int):
             retry_needed = True
 
         except PermanentError as exc:
+            # ADDED PRINT FOR PERMANENT ERROR
+            print(f"❌ PERMANENT ERROR on {result.platform}: {exc}")
             result.status        = PostStatus.FAILED
             result.error_message = str(exc)
             result.save()
 
         except Exception as exc:
+            # ADDED PRINT FOR UNEXPECTED ERROR
             log.exception("Unexpected error in %s publisher", result.platform)
+            print(f"💥 UNEXPECTED ERROR on {result.platform}: {exc}")
             result.status        = PostStatus.FAILED
             result.error_message = f"Unexpected: {exc!r}"
             result.save()
@@ -150,6 +158,7 @@ def refresh_expiring_credentials():
             get_publisher(cred.platform).refresh(cred)
             cred.save()
             refreshed += 1
-        except Exception:
+        except Exception as exc:
+            print(f"❌ Failed to refresh credential for {cred.platform}: {exc}") # ADDED PRINT
             log.exception("Failed to refresh credential for %s", cred.platform)
     return {"refreshed": refreshed}

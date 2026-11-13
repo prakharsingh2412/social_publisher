@@ -36,7 +36,6 @@ class YouTubePublisher(BasePublisher):
         new_tokens = res.json()
         credential.encrypted_token = new_tokens["access_token"]
         
-        # Google sometimes returns a new refresh token, keep it if so
         if "refresh_token" in new_tokens:
             credential.encrypted_secret = new_tokens["refresh_token"]
             
@@ -45,11 +44,17 @@ class YouTubePublisher(BasePublisher):
 
     def _get_authenticated_service(self, credential):
         """Refreshes token if needed and returns the YouTube API client."""
-        # Check if token is expired (or expires in the next 5 minutes)
         if credential.token_expires_at and credential.token_expires_at <= timezone.now() + timedelta(minutes=5):
             self.refresh(credential)
 
-        creds = Credentials(token=credential.encrypted_token)
+        # FIXED: Provide ALL required fields so Google's library doesn't crash mid-upload
+        creds = Credentials(
+            token=credential.encrypted_token,
+            refresh_token=credential.encrypted_secret,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=settings.YOUTUBE_CLIENT_ID,
+            client_secret=settings.YOUTUBE_CLIENT_SECRET
+        )
         return build("youtube", "v3", credentials=creds)
 
     def publish(self, credential, payload: Payload) -> PublishResult:
@@ -59,13 +64,19 @@ class YouTubePublisher(BasePublisher):
         video_url = payload.media_urls[0]
         youtube = self._get_authenticated_service(credential)
 
+        tmp_file_path = None
+        media = None # Keep a reference to explicitly delete it later
+
         # 1. Download the video from the provided URL to a temp file
         try:
-            video_res = requests.get(video_url, stream=True, timeout=30)
+            download_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            video_res = requests.get(video_url, headers=download_headers, stream=True, timeout=30)
             video_res.raise_for_status()
             
-            # Create a temporary file
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            tmp_file_path = tmp_file.name
             for chunk in video_res.iter_content(chunk_size=8192):
                 tmp_file.write(chunk)
             tmp_file.close()
@@ -81,7 +92,7 @@ class YouTubePublisher(BasePublisher):
             "snippet": {
                 "title": title,
                 "description": description,
-                "categoryId": "22" # 22 is 'People & Blogs'
+                "categoryId": "22"
             },
             "status": {
                 "privacyStatus": "public", 
@@ -91,7 +102,7 @@ class YouTubePublisher(BasePublisher):
 
         # 3. Upload to YouTube
         try:
-            media = MediaFileUpload(tmp_file.name, chunksize=-1, resumable=True)
+            media = MediaFileUpload(tmp_file_path, chunksize=-1, resumable=True)
             request = youtube.videos().insert(
                 part="snippet,status",
                 body=body,
@@ -110,6 +121,14 @@ class YouTubePublisher(BasePublisher):
         except Exception as e:
             raise TransientError(f"YouTube upload failed: {str(e)}")
         finally:
-            # Always clean up the temp file
-            if os.path.exists(tmp_file.name):
-                os.remove(tmp_file.name)
+            # FIXED: Safely delete the file on Windows
+            if media:
+                del media # Release the handle
+            
+            if tmp_file_path and os.path.exists(tmp_file_path):
+                try:
+                    os.remove(tmp_file_path)
+                except PermissionError:
+                    # Windows sometimes holds a lock on the file for a few seconds. 
+                    # We ignore it; the OS will clean up the Temp folder eventually.
+                    pass 
